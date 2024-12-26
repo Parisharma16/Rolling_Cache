@@ -1,0 +1,92 @@
+#include "ooo_cpu.h"
+
+enum HistorySaturating { stronglyTaken = 0, weaklyTaken, weaklyNotTaken, stronglyNotTaken };
+enum Selector { stronglyGShare = 0, weaklyGShare, weaklyBimodal, stronglyBimodal };
+
+#define TABLE_SIZE 2048
+
+// Predictor tables
+HistorySaturating gTable[NUM_CPUS][TABLE_SIZE];
+HistorySaturating bTable[NUM_CPUS][TABLE_SIZE];
+Selector sTable[NUM_CPUS][TABLE_SIZE];
+
+struct GlobalHistory {
+    unsigned int b : 11; // 11-bit global history register
+} globalHistory[NUM_CPUS];
+
+void O3_CPU::initialize_branch_predictor()
+{
+    // Initialize all tables for the tournament predictor
+    for (int i = 0; i < NUM_CPUS; i++) {
+        globalHistory[i].b = 0;
+
+        for (int j = 0; j < TABLE_SIZE; j++) {
+            gTable[i][j] = stronglyTaken;
+            bTable[i][j] = stronglyTaken;
+            sTable[i][j] = stronglyGShare;
+        }
+    }
+
+    std::cout << "CPU " << cpu << " Tournament branch predictor initialized" << std::endl;
+}
+
+uint8_t O3_CPU::predict_branch(uint64_t ip)
+{
+    uint32_t gIndex = (ip ^ globalHistory[cpu].b) % TABLE_SIZE; // GShare index
+    uint32_t bIndex = ip % TABLE_SIZE;                         // Bimodal index
+
+    bool gPrediction = (gTable[cpu][gIndex] <= weaklyTaken);   // GShare prediction
+    bool bPrediction = (bTable[cpu][bIndex] <= weaklyTaken);   // Bimodal prediction
+
+    // Use selector table to choose between GShare and Bimodal
+    switch (sTable[cpu][bIndex]) {
+        case stronglyGShare:
+        case weaklyGShare:
+            return gPrediction;
+        case weaklyBimodal:
+        case stronglyBimodal:
+            return bPrediction;
+    }
+
+    return 0; // Default prediction (not taken)
+}
+
+void O3_CPU::last_branch_result(uint64_t ip, uint8_t taken)
+{
+    uint32_t gIndex = (ip ^ globalHistory[cpu].b) % TABLE_SIZE; // GShare index
+    uint32_t bIndex = ip % TABLE_SIZE;                         // Bimodal index
+
+    bool gPrediction = (gTable[cpu][gIndex] <= weaklyTaken);
+    bool bPrediction = (bTable[cpu][bIndex] <= weaklyTaken);
+
+    // Update GShare predictor
+    if (taken) {
+        if (gTable[cpu][gIndex] > stronglyTaken)
+            gTable[cpu][gIndex] = (HistorySaturating)(gTable[cpu][gIndex] - 1);
+    } else {
+        if (gTable[cpu][gIndex] < stronglyNotTaken)
+            gTable[cpu][gIndex] = (HistorySaturating)(gTable[cpu][gIndex] + 1);
+    }
+
+    // Update Bimodal predictor
+    if (taken) {
+        if (bTable[cpu][bIndex] > stronglyTaken)
+            bTable[cpu][bIndex] = (HistorySaturating)(bTable[cpu][bIndex] - 1);
+    } else {
+        if (bTable[cpu][bIndex] < stronglyNotTaken)
+            bTable[cpu][bIndex] = (HistorySaturating)(bTable[cpu][bIndex] + 1);
+    }
+
+    // Update Selector Table
+    if ((gPrediction == taken) && (bPrediction != taken)) {
+        if (sTable[cpu][bIndex] > stronglyGShare)
+            sTable[cpu][bIndex] = (Selector)(sTable[cpu][bIndex] - 1);
+    } else if ((bPrediction == taken) && (gPrediction != taken)) {
+        if (sTable[cpu][bIndex] < stronglyBimodal)
+            sTable[cpu][bIndex] = (Selector)(sTable[cpu][bIndex] + 1);
+    }
+
+    // Update global history register
+    globalHistory[cpu].b <<= 1;
+    globalHistory[cpu].b |= taken ? 1 : 0;
+}
