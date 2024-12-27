@@ -258,6 +258,8 @@ void CACHE::handle_writeback()
 
     // access cache
     uint32_t set = get_set(WQ.entry[index].address);
+    // if (cache_type == IS_LLC)
+    // cout << " in handle writeback function " << endl;
     int way = check_hit(&WQ.entry[index]);
 
     if (way >= 0)
@@ -579,6 +581,10 @@ void CACHE::handle_read()
 
       // access cache
       uint32_t set = get_set(RQ.entry[index].address);
+      /* if (cache_type == IS_LLC)
+         cout << " in handle read function " << endl;
+         */
+
       int way = check_hit(&RQ.entry[index]);
 
       if (way >= 0)
@@ -910,6 +916,9 @@ void CACHE::handle_prefetch()
 
       // access cache
       uint32_t set = get_set(PQ.entry[index].address);
+      // if (cache_type == IS_LLC)
+      //  cout << " in handle prefetch function " << endl;
+
       int way = check_hit(&PQ.entry[index]);
 
       if (way >= 0)
@@ -1215,31 +1224,103 @@ void CACHE::fill_cache(uint32_t set, uint32_t way, PACKET *packet)
   if (cache_type == IS_LLC)
   {
     uint32_t AddrSet = (packet->address >> LOG2_BLOCK_SIZE) & ((1 << lg2(NUM_SET)) - 1);
+    /*cout << "\n[" << NAME << "] " << __func__ << " Processing LLC Cache Logic for AddrSet: " << AddrSet << endl;
 
+    // Debug: Print initial states
+    cout << ">>> Initial State:" << endl;
+
+    cout << "fill_count before: ";
+    for (int i = 0; i < NUM_SET; i++)
+    {
+      cout << fill_count[i] << " ";
+    }
+    cout << endl;
+
+    cout << "PrPtr before: ";
+    for (int i = 0; i < NUM_SET; i++)
+    {
+      cout << PrPtr[i] << " ";
+    }
+    cout << endl;
+
+    cout << "PsPtr before: ";
+    for (int i = 0; i < NUM_SET; i++)
+    {
+      cout << PsPtr[i] << " ";
+    }
+    cout << endl;*/
+
+    // Increment fill count
     fill_count[AddrSet]++;
+    // cout << "[" << NAME << "] Incremented fill_count[" << AddrSet << "] to " << fill_count[AddrSet] << endl;
+
+    // Handle fill_count exceeding threshold W
     if (fill_count[AddrSet] > W)
     {
       uint32_t temp = PsPtr[AddrSet];
+      // cout << "[" << NAME << "] fill_count exceeded threshold W. Performing Ptr swap and invalidation." << endl;
+      // cout << "[" << NAME << "] PsPtr[" << AddrSet << "] (old) = " << PsPtr[AddrSet] << ", PrPtr[" << AddrSet << "] (old) = " << PrPtr[AddrSet] << endl;
+
       PsPtr[AddrSet] = PrPtr[AddrSet];
 
       if (!freelist.empty())
       {
         int index = rand() % freelist.size(); // Random index selection
         PrPtr[AddrSet] = freelist[index];
+        // cout << "[" << NAME << "] Selected freelist[" << index << "] = " << freelist[index] << " as new PrPtr[" << AddrSet << "]" << endl;
+
         freelist[index] = freelist[freelist_size - 1];
         freelist.pop_back();
       }
       else
       {
-        // Handle empty freelist scenario (log or assert)
-        cerr << "Error: Freelist is empty for AddrSet: " << AddrSet << endl;
+        cerr << "[" << NAME << "_ERROR] Freelist is empty for AddrSet: " << AddrSet << endl;
       }
 
       fill_count[AddrSet] = 1;
+      // cout << "[" << NAME << "] Reset fill_count[" << AddrSet << "] to 1 after Ptr update." << endl;
+
       invalidate_cache_line(temp, AddrSet);
       freelist.push_back(temp);
+      // cout << "[" << NAME << "] Pushed " << temp << " back to freelist." << endl;
+
+      // Debug: Print updated freelist
+      /*cout << "Updated freelist: ";
+      for (int i = 0; i < freelist.size(); i++)
+      {
+        cout << freelist[i] << " ";
+      }
+      cout << endl;*/
     }
-    block[set][way].AddrSet = PrPtr[AddrSet];
+
+    /*
+    // Debug: Print final states
+    cout << "\n>>> Final State:" << endl;
+
+    cout << "fill_count after: ";
+    for (int i = 0; i < NUM_SET; i++)
+    {
+      cout << fill_count[i] << " ";
+    }
+    cout << endl;
+
+    cout << "PrPtr after: ";
+    for (int i = 0; i < NUM_SET; i++)
+    {
+      cout << PrPtr[i] << " ";
+    }
+    cout << endl;
+
+    cout << "PsPtr after: ";
+    for (int i = 0; i < NUM_SET; i++)
+    {
+      cout << PsPtr[i] << " ";
+    }
+    cout << endl;
+
+    cout << "[" << NAME << "] Setting block[" << set << "][" << way << "].AddrSet to PrPtr[" << AddrSet << "] = " << PrPtr[AddrSet] << endl;
+    */
+    block[set][way].AddrSet = AddrSet; // PrPtr[AddrSet];
   }
 
   DP(if (warmup_complete[packet->cpu]) {
@@ -1249,7 +1330,7 @@ void CACHE::fill_cache(uint32_t set, uint32_t way, PACKET *packet)
 }
 /************************/
 
-int CACHE::invalidate_cache_line(uint32_t temp, uint32_t AddrSet)
+void CACHE::invalidate_cache_line(uint32_t temp, uint32_t AddrSet)
 {
 
   int match_way = -1;
@@ -1262,9 +1343,67 @@ int CACHE::invalidate_cache_line(uint32_t temp, uint32_t AddrSet)
       match_way = way;
     }
   }
-
-  return match_way;
 }
+
+/*
+void CACHE::invalidate_cache_line(uint32_t temp, uint32_t AddrSet)
+{
+  cout << "\n[" << NAME << "] " << __func__ << " Start invalidation for temp: " << temp << " AddrSet: " << AddrSet << endl;
+
+  if (temp >= NUM_SET)
+  {
+    cerr << "[" << NAME << "_ERROR] " << __func__ << " Invalid set index: " << temp << " NUM_SET: " << NUM_SET << endl;
+    assert(0);
+  }
+
+  int match_way = -1;
+  bool found = false;
+
+  // Debug: Print all ways before invalidation
+  cout << "[" << NAME << "] Cache Block State before invalidation (Set " << temp << "):" << endl;
+  for (uint32_t way = 0; way < NUM_WAY; way++)
+  {
+    cout << "  Way " << way << ": Valid=" << block[temp][way].valid
+         << " AddrSet=" << block[temp][way].AddrSet
+         << " Tag=" << hex << block[temp][way].tag << dec << endl;
+  }
+
+  // Invalidate the matching cache line
+  for (uint32_t way = 0; way < NUM_WAY; way++)
+  {
+    if (block[temp][way].valid && (block[temp][way].AddrSet == AddrSet))
+    {
+      cout << "[" << NAME << "] Invalidating Cache Line -> Set: " << temp
+           << " Way: " << way
+           << " AddrSet: " << AddrSet << endl;
+
+      block[temp][way].valid = 0;
+      match_way = way;
+      found = true;
+    }
+  }
+
+  if (found)
+  {
+    cout << "[" << NAME << "] Successfully invalidated cache line in Set: " << temp
+         << " Way: " << match_way << endl;
+  }
+  else
+  {
+    cout << "[" << NAME << "] No matching cache line found for AddrSet: " << AddrSet
+         << " in Set: " << temp << endl;
+  }
+
+  // Debug: Print all ways after invalidation
+  cout << "[" << NAME << "] Cache Block State after invalidation (Set " << temp << "):" << endl;
+  for (uint32_t way = 0; way < NUM_WAY; way++)
+  {
+    cout << "  Way " << way << ": Valid=" << block[temp][way].valid
+         << " AddrSet=" << block[temp][way].AddrSet
+         << " Tag=" << hex << block[temp][way].tag << dec << endl;
+  }
+}
+*/
 
 int CACHE::check_hit_helper(BLOCK **block, uint32_t set, uint32_t AddrSet, PACKET *packet)
 {
@@ -1299,6 +1438,60 @@ int CACHE::check_hit_helper(BLOCK **block, uint32_t set, uint32_t AddrSet, PACKE
   return match_way;
 }
 
+/*
+int CACHE::check_hit_helper(BLOCK **block, uint32_t set, uint32_t AddrSet, PACKET *packet)
+{
+  int match_way = -1;
+
+  // Debug: Check set boundary
+  if (NUM_SET < set)
+  {
+    cerr << "[" << NAME << "_ERROR] " << __func__ << " Invalid set index: " << set << " NUM_SET: " << NUM_SET;
+    cerr << " Address: " << hex << packet->address << " Full_addr: " << packet->full_addr << dec;
+    cerr << " Event: " << packet->event_cycle << endl;
+    assert(0);
+  }
+
+  if (cache_type == IS_LLC)
+  {
+    cout << "[" << NAME << "] " << __func__ << " Checking set: " << set << " AddrSet: " << AddrSet << endl;
+    // Debug: Print block state for the set
+    for (uint32_t way = 0; way < NUM_WAY; way++)
+    {
+      cout << "  Way " << way << ": Valid=" << block[set][way].valid
+           << " Tag=" << hex << block[set][way].tag << dec
+           << " LRU=" << block[set][way].lru << endl;
+    }
+  }
+
+  // Check for hit
+  for (uint32_t way = 0; way < NUM_WAY; way++)
+  {
+    if (block[set][way].valid && (block[set][way].tag == packet->address))
+    {
+      match_way = way;
+
+      DP(if (warmup_complete[packet->cpu]) {
+        cout << "[" << NAME << "] " << __func__ << " HIT -> Instr_id: " << packet->instr_id
+             << " Addr: " << hex << packet->address
+             << " Set: " << set << " Way: " << way
+             << " LRU: " << block[set][way].lru << dec << endl;
+      });
+
+      if (cache_type == IS_LLC)
+        cout << "[" << NAME << "] HIT Found in set " << set << " way " << way << endl;
+
+      break;
+    }
+  }
+
+  if (match_way == -1 && (cache_type == IS_LLC))
+    cout << "[" << NAME << "] MISS in set " << set << endl;
+
+  return match_way;
+}
+*/
+
 /*******MODIFIED*********/
 int CACHE::check_hit(PACKET *packet)
 {
@@ -1306,17 +1499,37 @@ int CACHE::check_hit(PACKET *packet)
   {
     uint64_t AddrSet = (packet->address) & ((1 << lg2(NUM_SET)) - 1);
 
+    // cout << "Checking hit or miss" << endl;
+
     uint32_t set_1 = PrPtr[AddrSet];
     uint32_t set_2 = PsPtr[AddrSet];
 
+    // cout << "[" << NAME << "] LLC Address Set: " << AddrSet << endl;
+    // cout << "[" << NAME << "] PrPtr[AddrSet]: " << PrPtr[AddrSet] << ", PsPtr[AddrSet]: " << PsPtr[AddrSet] << endl;
+
     int match_way = -1;
+    // cout << "[" << NAME << "] Checking Primary Set: " << set_1 << endl;
 
     match_way = check_hit_helper(block, set_1, AddrSet, packet);
 
     if (match_way != -1)
-      return match_way;
+    {
+      // cout << "[" << NAME << "] Hit found in Primary Set: " << set_1 << endl;
 
-    return check_hit_helper(block, set_2, AddrSet, packet);
+      return match_way;
+    }
+
+    // cout << "[" << NAME << "] Checking Secondary Set: " << set_2 << endl;
+    match_way = check_hit_helper(block, set_2, AddrSet, packet);
+
+    /*if (match_way != -1)
+    {
+      cout << "[" << NAME << "] Hit found in Secondary Set: " << set_2 << endl;
+      return match_way;
+    }
+
+    cout << "[" << NAME << "] MISS in both Primary and Secondary Sets" << endl;*/
+    return -1;
   }
 
   uint32_t set = get_set(packet->address);
@@ -1956,3 +2169,4 @@ void CACHE::increment_WQ_FULL(uint64_t address)
 {
   WQ.FULL++;
 }
+

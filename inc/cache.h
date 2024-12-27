@@ -157,6 +157,35 @@ public:
                 PsPtr[i] = (std::rand() % NUM_SET);
                 fill_count[i] = 0;
             }
+
+            /*
+            cout<<"Intially freelist looks like this "<<endl;
+
+            for (int i = 0; i < freelist_size; i++)
+            {
+                cout<<freelist[i]<<" ";
+            }
+            cout<<endl;
+
+            for (int i = 0; i <  NUM_SET; i++)
+            {
+                cout<<PrPtr[i]<<" ";
+            }
+            cout<<endl;
+
+            for (int i = 0; i <  NUM_SET; i++)
+            {
+                cout<<PsPtr[i]<<" ";
+            }
+            cout<<endl;
+
+            for (int i = 0; i <  NUM_SET; i++)
+            {
+                cout<<freelist[i]<<" ";
+            }
+            cout<<endl;
+
+            */
         }
 
         LATENCY = 0;
@@ -227,7 +256,7 @@ public:
     int check_hit(PACKET *packet),
         check_hit_helper(BLOCK **block, uint32_t set, uint32_t AddrSet, PACKET *packet),
         invalidate_entry(uint64_t inval_addr),
-        invalidate_cache_line(uint32_t temp, uint32_t AddrSet),
+
         check_mshr(PACKET *packet),
         prefetch_line(uint64_t ip, uint64_t base_addr, uint64_t pf_addr, int prefetch_fill_level, uint32_t prefetch_metadata),
         kpc_prefetch_line(uint64_t base_addr, uint64_t pf_addr, int prefetch_fill_level, int delta, int depth, int signature, int confidence, uint32_t prefetch_metadata);
@@ -235,6 +264,7 @@ public:
     void handle_fill(),
         handle_writeback(),
         handle_read(),
+        invalidate_cache_line(uint32_t temp, uint32_t AddrSet),
         handle_prefetch();
 
     void add_mshr(PACKET *packet),
