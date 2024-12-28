@@ -2169,4 +2169,3 @@ void CACHE::increment_WQ_FULL(uint64_t address)
 {
   WQ.FULL++;
 }
-

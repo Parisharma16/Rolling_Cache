@@ -83,6 +83,7 @@ extern uint32_t PAGE_TABLE_LATENCY, SWAP_LATENCY;
 #define W 16 // declared by me
 
 #define freelist_size 32
+
 // declared by me!!
 
 class CACHE : public MEMORY
@@ -90,7 +91,7 @@ class CACHE : public MEMORY
 public:
     uint32_t cpu;
     const string NAME;
-    const uint32_t NUM_SET, NUM_WAY, NUM_LINE, WQ_SIZE, RQ_SIZE, PQ_SIZE, MSHR_SIZE;
+    uint32_t NUM_SET, NUM_WAY, NUM_LINE, WQ_SIZE, RQ_SIZE, PQ_SIZE, MSHR_SIZE;
     uint32_t LATENCY;
     BLOCK **block;
     int fill_level;
@@ -133,7 +134,6 @@ public:
 
         if (cache_type == IS_LLC)
         {
-
             srand(time(0));
             freelist.resize(freelist_size);
 
@@ -157,34 +157,32 @@ public:
                 PsPtr[i] = (std::rand() % NUM_SET);
                 fill_count[i] = 0;
             }
-
             /*
-            cout<<"Intially freelist looks like this "<<endl;
+            cout << "Intially freelist looks like this " << endl;
 
             for (int i = 0; i < freelist_size; i++)
             {
-                cout<<freelist[i]<<" ";
+                cout << freelist[i] << " ";
             }
-            cout<<endl;
+            cout << endl;
 
-            for (int i = 0; i <  NUM_SET; i++)
+            for (int i = 0; i < NUM_SET; i++)
             {
-                cout<<PrPtr[i]<<" ";
+                cout << PrPtr[i] << " ";
             }
-            cout<<endl;
+            cout << endl;
 
-            for (int i = 0; i <  NUM_SET; i++)
+            for (int i = 0; i < NUM_SET; i++)
             {
-                cout<<PsPtr[i]<<" ";
+                cout << PsPtr[i] << " ";
             }
-            cout<<endl;
+            cout << endl;
 
-            for (int i = 0; i <  NUM_SET; i++)
+            for (int i = 0; i < NUM_SET; i++)
             {
-                cout<<freelist[i]<<" ";
+                cout << freelist[i] << " ";
             }
-            cout<<endl;
-
+            cout << endl;
             */
         }
 
